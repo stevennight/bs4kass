@@ -20,10 +20,22 @@ static int missing_end = 0;
 static char* dialog_buffer = NULL;
 static char* dialog_buffer_tail = NULL;
 
+
+FILE* xml_file = NULL;
+
+
 static void XMLCALL
 tt_start(void *userData, const char *name, const char **attr)
 {
     FILE* fp = (FILE*)userData;
+
+    if(strcmp(name, "tt") == 0) fprintf(xml_file, "<?xml version=\"1.0\" encoding=\"utf-8\"?>");
+    fprintf(xml_file, "<%s ", name);
+    for (int i = 0; attr[i]; i += 2)
+    {
+        fprintf(xml_file, "%s=\"%s\" ", attr[i], attr[i+1]);
+    }
+    fprintf(xml_file, ">");
 
     if (strcmp(name, "div") == 0)
     {
@@ -86,6 +98,8 @@ tt_start(void *userData, const char *name, const char **attr)
 static void XMLCALL
 tt_end(void *userData, const char *name)
 {
+    fprintf(xml_file, "</%s>", name);
+
     FILE* fp = (FILE*)userData;
 
     if (strcmp(name, "div") == 0)
@@ -117,6 +131,8 @@ tt_text(void *userData, const char *s, int len)
 {
     if (insert_new_text)
     {
+        fwrite(s, 1, len, xml_file);
+
         memcpy(dialog_buffer_tail, s, len);
         dialog_buffer_tail += len;
         *dialog_buffer_tail = 0;
@@ -193,6 +209,12 @@ int main(int argc, char **argv)
         fprintf(stderr, "Could not open destination file %s\n", ass_filename);
         exit(1);
     }
+    char* xml_filename = (char*)malloc(len + 14);
+    strcpy(xml_filename, filename);
+    if (strcmp(xml_filename + len - 5, ".m2ts") == 0)
+        ass_filename[len - 5] = 0;
+    strcat(xml_filename, ".xml");
+    xml_file = fopen(xml_filename, "wb,ccs=UTF-8");
 
     printf("[Source] %s\n", filename);
     printf("[Target] %s\n", ass_filename);
@@ -233,7 +255,7 @@ int main(int argc, char **argv)
                 p = NULL;
             }
             // fputs("\n;", ass_file);
-            // fwrite(pkt.data, 1, pkt.size, ass_file);
+            // fwrite(pkt.data + 12, 1, pkt.size - 12, xml_file);
             // fputs("\n", ass_file);
         }
         av_packet_unref(&pkt);
@@ -244,6 +266,7 @@ int main(int argc, char **argv)
 
     puts("");
     fclose(ass_file);
+    fclose(xml_file);
     avformat_close_input(&fmt_ctx);
 
     return 0;
